@@ -1,6 +1,6 @@
 // hooks/useMultiFileParser.ts
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FileEntry } from "@/testbed/multi/page";
+import { FileEntry } from "@/(protected)/testbed/multi/page";
 import {
     WorkerMessageOut,
     CsvWorkerMessageIn,

@@ -5,6 +5,10 @@ export function proxy(request: NextRequest) {
     const hasToken = request.cookies.has("access_token");
     const pathname = request.nextUrl.pathname;
 
+    if (pathname.startsWith("/protected")) {
+        return NextResponse.next();
+    }
+
     // 💡 경로 검사 변수 추가
     const isAuthPath = pathname.startsWith("/auth"); // 로그인 화면들
     const isAuthApi = pathname.startsWith("/api/auth"); // 로그인 처리/토큰 발급 API

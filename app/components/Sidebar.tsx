@@ -1,5 +1,5 @@
 "use client";
-import { FileEntry } from "@/testbed/multi/page";
+import { FileEntry } from "@/(protected)/testbed/multi/page";
 import React from "react";
 
 interface SidebarProps {
