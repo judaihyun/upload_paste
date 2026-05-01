@@ -9,7 +9,6 @@ import { useFileParser } from "@/hooks/useFileParser";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function TestBed() {
-    const [isPending, startTransition] = useTransition();
     const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
     const [isSwitching, setIsSwitching] = useState(false);
 
