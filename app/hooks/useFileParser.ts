@@ -1,119 +1,79 @@
+// hooks/useFileParser.ts
 import { useState, useRef, useCallback, useEffect } from "react";
-import Papa from "papaparse";
-
-interface ParseResult {
-    allSheetsData: Record<string, any[][]>;
-    sheetNames: string[];
-    parseTime: number;
-}
+import {
+    WorkerMessageOut,
+    CsvWorkerMessageIn,
+    ExcelWorkerMessageIn,
+    ParseCompletePayload,
+} from "@/types/parser";
 
 interface UseFileParserProps {
-    onSuccess: (result: ParseResult) => void;
+    onSuccess: (result: ParseCompletePayload & { parseTime: number }) => void;
     onError: (error: string) => void;
 }
+
+const PROCESS_TIME_THRESHOLD = 150 * 1000; // 150초
 
 export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
     const [isParsing, setIsParsing] = useState(false);
     const [progress, setProgress] = useState(0);
+
     const workerRef = useRef<Worker | null>(null);
-    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const isCancelledRef = useRef<boolean>(false);
+    const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 가짜 진행률 시뮬레이션
-    const startProgress = () => {
-        setProgress(0);
-        progressIntervalRef.current = setInterval(() => {
-            setProgress(p => (p < 80 ? p + Math.random() * 8 : p >= 95 ? 95 : p + 0.5));
-        }, 200);
-    };
+    // 💡 2. Silent Worker Crash 감지기 (타임아웃 로직)
+    const resetHeartbeatTimeout = useCallback(() => {
+        if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
 
-    const stopProgress = () => {
-        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        setProgress(0);
-    };
+        // 100초 동안 워커에서 응답(진행률 또는 Heartbeat)이 없으면 OOM 사망으로 간주
+        heartbeatTimeoutRef.current = setTimeout(() => {
+            console.error("Worker Timeout! OOM(메모리 초과)이 의심됩니다.");
+            terminateWorker();
+            onError(
+                "파싱 프로세스가 응답하지 않습니다. (파일이 너무 커서 메모리가 초과되었을 수 있습니다)",
+            );
+        }, PROCESS_TIME_THRESHOLD);
+    }, [onError]);
 
-    // 워커 강제 종료 및 초기화
+    // 💡 4. 파싱 강제 취소 (확실한 메모리 반환)
     const terminateWorker = useCallback(() => {
         if (workerRef.current) {
+            // 진행 중이던 파서에게 중단 신호 전송 (graceful exit 시도)
+            workerRef.current.postMessage({ action: "CANCEL" });
+            // 물리적 스레드 즉각 킬
             workerRef.current.terminate();
             workerRef.current = null;
         }
-        stopProgress();
+
+        if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
+
+        setProgress(0);
         setIsParsing(false);
+        console.log("Worker 강제 종료 완료 및 상태 초기화");
     }, []);
 
-    // 컴포넌트 언마운트 시 워커 메모리 누수 방지 (안전장치)
     useEffect(() => {
         return () => terminateWorker();
     }, [terminateWorker]);
 
-    // 핵심 파싱 로직 (확장자 분기 포함)
+    // 메인 파싱 실행 함수
     const parseFile = async (file: File) => {
         setIsParsing(true);
-        startProgress();
+        setProgress(0);
         const startTime = performance.now();
 
         try {
-            const buffer = await file.arrayBuffer();
             const extension = file.name.split(".").pop()?.toLowerCase();
 
-            // 💡 파일 포맷에 따른 워커(Worker) 분기 처리
+            // 💡 3. Strategy 분기: 확장자에 따라 워커 객체만 교체
             if (extension === "csv") {
-                console.log("CSV 엔진 가동...");
-                // TODO: 향후 CSV 전용 워커(예: PapaParse 기반)로 교체하기 좋은 확장 포인트
-                // workerRef.current = new Worker(
-                //     new URL("../workers/excel.worker.ts", import.meta.url),
-                // );
-                const allData: any[][] = [];
-                setProgress(0); // 진짜 진행률을 표시하기 위한 0 초기화
-
-                Papa.parse(file, {
-                    header: false,
-                    skipEmptyLines: true,
-                    // 💡 핵심 1: worker: true 삭제 (Next.js 충돌 회피)
-                    chunkSize: 1024 * 1024 * 5, // 💡 핵심 2: 5MB 단위 스트리밍 (메인 스레드 멈춤 방지)
-                    chunk: (results, parser) => {
-                        if (isCancelledRef.current) {
-                            parser.abort();
-                            return;
-                        }
-
-                        // 💡 방어코드: V8 Call Stack Limit(Maximum call stack size exceeded) 방지
-                        const chunkData = results.data as any[][];
-                        for (let i = 0; i < chunkData.length; i++) {
-                            allData.push(chunkData[i]);
-                        }
-
-                        // 💡 핵심 3: 가짜 타이머가 아닌 진짜 진행률(%) 계산 (현재 파싱된 바이트 / 전체 바이트)
-                        const currentBytes = results.meta.cursor;
-                        const realProgress = Math.min(
-                            99,
-                            Math.round((currentBytes / file.size) * 100),
-                        );
-                        setProgress(realProgress);
-                    },
-                    complete: () => {
-                        if (isCancelledRef.current) return;
-
-                        const parseTime = performance.now() - startTime;
-                        setProgress(100);
-
-                        onSuccess({
-                            allSheetsData: { "CSV Data": allData },
-                            sheetNames: ["CSV Data"],
-                            parseTime,
-                        });
-
-                        setIsParsing(false);
-                    },
-                    error: error => {
-                        if (!isCancelledRef.current) onError(`CSV 파싱 실패: ${error.message}`);
-                        setIsParsing(false);
-                    },
-                });
-                return; // CSV 로직 종료
+                console.log("CSV 파일 감지, csv.worker.ts로 처리");
+                workerRef.current = new Worker(
+                    new URL("../workers/csv.worker.ts", import.meta.url),
+                );
             } else if (extension === "xlsx" || extension === "xls") {
-                console.log("Excel 엔진 가동...");
+                // excel.worker.ts도 CSV 워커와 동일한 WorkerMessage 통신 규격으로 만들어야 합니다.
+                console.log("엑셀 파일 감지, excel.worker.ts로 처리");
                 workerRef.current = new Worker(
                     new URL("../workers/excel.worker.ts", import.meta.url),
                 );
@@ -121,26 +81,58 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
                 throw new Error("지원하지 않는 파일 형식입니다.");
             }
 
-            workerRef.current.postMessage({ buffer }, [buffer]);
+            // 최초 Heartbeat 타임아웃 타이머 시작
+            resetHeartbeatTimeout();
 
-            workerRef.current.onmessage = (event: MessageEvent) => {
-                const { success, allSheetsData, sheetNames, error } = event.data;
-                if (success) {
-                    const parseTime = performance.now() - startTime; // 💡 파싱 소요 시간 계산
-                    onSuccess({ allSheetsData, sheetNames, parseTime });
-                } else {
-                    onError(`파싱 실패: ${error}`);
+            // 워커 응답 리스너
+            workerRef.current.onmessage = (event: MessageEvent<WorkerMessageOut>) => {
+                const data = event.data;
+
+                // 응답이 오면 워커가 살아있다는 뜻이므로 타임아웃 초기화
+                resetHeartbeatTimeout();
+
+                switch (data.type) {
+                    case "HEARTBEAT":
+                        // do nothing, just reset timeout
+                        break;
+                    case "PROGRESS":
+                        setProgress(data.payload);
+                        break;
+                    case "COMPLETE":
+                        if (heartbeatTimeoutRef.current) clearTimeout(heartbeatTimeoutRef.current);
+                        setProgress(100);
+                        onSuccess({
+                            ...data.payload,
+                            parseTime: performance.now() - startTime,
+                        });
+                        terminateWorker();
+                        break;
+                    case "ERROR":
+                        terminateWorker();
+                        onError(data.payload);
+                        break;
                 }
-                terminateWorker();
             };
 
+            // 워커 내부에서 문법 오류 등 치명적 크래시 발생 시
             workerRef.current.onerror = err => {
-                onError("워커 프로세스에서 치명적인 에러가 발생했습니다.");
+                console.error("Worker Execution Error:", err);
                 terminateWorker();
+                onError("워커 프로세스에서 치명적인 에러가 발생했습니다.");
             };
+
+            // 💡 파일 포인터 전송 (ArrayBuffer가 아닌 File 객체 통째로)
+            // CSV 스트리밍을 위해 File을 그대로 넘깁니다. (Excel은 arrayBuffer 필요 여부에 따라 분기)
+            if (extension === "csv") {
+                workerRef.current.postMessage({ action: "START", file });
+            } else {
+                // 엑셀은 기존처럼 buffer를 던진다면:
+                const buffer = await file.arrayBuffer();
+                workerRef.current.postMessage({ action: "START", buffer }, [buffer]);
+            }
         } catch (error: any) {
-            onError(error.message);
             terminateWorker();
+            onError(error.message);
         }
     };
 
@@ -148,6 +140,6 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
         isParsing,
         progress,
         parseFile,
-        cancelParsing: terminateWorker,
+        cancelParsing: terminateWorker, // 이제 확실하게 동작합니다
     };
 }

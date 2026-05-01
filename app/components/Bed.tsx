@@ -35,7 +35,12 @@ export default function TestBed() {
             setSheetDataCache(allSheetsData);
             setSheetNames(sheetNames);
             setActiveSheet(sheetNames[0]);
-            setGridData(allSheetsData[sheetNames[0]]);
+            setIsSwitching(true);
+
+            setTimeout(() => {
+                renderStartTimeRef.current = performance.now();
+                setGridData(allSheetsData[sheetNames[0]]);
+            }, 50);
         },
         onError: errMsg => {
             alert(`시스템 에러: ${errMsg}`);

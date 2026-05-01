@@ -9,7 +9,7 @@
         ] /* Specify multiple folders that act like `./node_modules/@types`. */,
         "allowJs": false,
         "paths": {
-            "@/*": ["./app/*"]
+            "@/*": ["./app/*", "./*"]
         },
         "declaration": true,
         "skipLibCheck": true,
@@ -35,6 +35,7 @@
     "include": [
         "app/**/*.tsx",
         "app/**/*.ts",
+        "types/**/*.ts",
         "@types/**/*.ts",
         ".next/types/**/*.ts",
         ".next/dev/types/**/*.ts"
