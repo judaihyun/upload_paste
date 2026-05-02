@@ -1,3 +1,4 @@
+import { useFPS } from "@/hooks/useFPS";
 import React, { useEffect, useRef } from "react";
 
 export interface MemoryStats {
@@ -13,6 +14,15 @@ interface ConsoleProps {
 
 export default function Console({ memoryStats, isParsing }: ConsoleProps) {
     const formatMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(2);
+    const fps = useFPS();
+
+    // FPS 수치에 따른 색상 시각화 (60 방어 여부)
+    const getFpsColor = (currentFps: number) => {
+        if (currentFps === 0) return "text-slate-500"; // 초기 로딩
+        if (currentFps >= 55) return "text-green-400"; // 정상 (60fps 방어)
+        if (currentFps >= 30) return "text-yellow-400"; // 경고 (버벅임 시작)
+        return "text-red-500"; // 크리티컬 (메인 스레드 블로킹 심각)
+    };
 
     return (
         <div className="mt-5">
@@ -22,6 +32,7 @@ export default function Console({ memoryStats, isParsing }: ConsoleProps) {
                     <h4 className="font-semibold text-gray-800 m-0 flex items-center gap-2">
                         📊 V8 JS 메모리 모니터
                     </h4>
+
                     {isParsing && (
                         <span className="text-sm font-bold text-blue-600 animate-pulse">
                             파싱 진행 중... (UI 블로킹 유의)
@@ -51,6 +62,19 @@ export default function Console({ memoryStats, isParsing }: ConsoleProps) {
                         Chrome 환경에서만 메모리 측정이 가능합니다.
                     </p>
                 )}
+            </div>
+            <div className="fixed bottom-4 right-4 bg-slate-900/90 border border-slate-700 rounded-lg p-3 shadow-2xl backdrop-blur-sm z-[9999] font-mono text-sm flex flex-col gap-2 pointer-events-none">
+                <div className="text-slate-400 text-xs font-bold mb-1">⚙️ SYSTEM CONSOLE</div>
+
+                <div className="flex items-center justify-between gap-4">
+                    <span className="text-slate-300">RENDER FPS</span>
+                    <span className={`font-black ${getFpsColor(fps)}`}>
+                        {fps === 0 ? "--" : fps}{" "}
+                        <span className="text-xs font-normal opacity-70">fps</span>
+                    </span>
+                </div>
+
+                {/* 향후 워커 상태나 파싱 큐 상태를 여기에 추가할 수 있습니다 */}
             </div>
         </div>
     );
