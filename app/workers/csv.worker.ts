@@ -3,41 +3,28 @@ import Papa from "papaparse";
 import { CsvWorkerMessageIn, WorkerMessageOut } from "@/types/parser";
 
 let isCancelled = false;
-let heartbeatInterval: NodeJS.Timeout;
-
-// 메인 스레드로 생존 신호를 보내는 함수 (Silent Crash 방지)
-const startHeartbeat = () => {
-    heartbeatInterval = setInterval(() => {
-        postMessage({ type: "HEARTBEAT" } as WorkerMessageOut);
-    }, 1000);
-};
-
-const stopHeartbeat = () => {
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-};
 
 self.onmessage = async (e: MessageEvent<CsvWorkerMessageIn>) => {
     const data = e.data;
 
+    // 💡 1. 취소 신호가 오면 상태만 변경 (하트비트 중단 로직 삭제됨)
     if (data.action === "CANCEL") {
         isCancelled = true;
-        stopHeartbeat();
         return;
     }
 
     if (data.action === "START" && data.file) {
         isCancelled = false;
-        startHeartbeat();
         const allData: any[][] = [];
 
         try {
             Papa.parse(data.file, {
-                worker: false, // 이미 Worker 내부이므로 false 설정 (중첩 방지)
+                worker: false, // 이미 우리가 생성한 Worker 내부이므로 false 설정 (이중 워커 방지)
                 chunkSize: 1024 * 1024 * 5, // 5MB 단위 스트리밍
                 skipEmptyLines: true,
                 chunk: (results, parser) => {
                     if (isCancelled) {
-                        parser.abort();
+                        parser.abort(); // 즉시 파싱 중단
                         return;
                     }
 
@@ -47,7 +34,7 @@ self.onmessage = async (e: MessageEvent<CsvWorkerMessageIn>) => {
                         allData.push(chunkData[i]);
                     }
 
-                    // 2. 진행률 전송
+                    // 2. 진행률 전송 (이것만 메인 스레드로 보냄)
                     const currentBytes = results.meta.cursor;
                     const progress = Math.min(
                         99,
@@ -57,7 +44,6 @@ self.onmessage = async (e: MessageEvent<CsvWorkerMessageIn>) => {
                 },
                 complete: () => {
                     if (isCancelled) return;
-                    stopHeartbeat();
 
                     // 완료 결과 전송
                     postMessage({
@@ -71,7 +57,7 @@ self.onmessage = async (e: MessageEvent<CsvWorkerMessageIn>) => {
                 },
                 error: error => {
                     if (isCancelled) return;
-                    stopHeartbeat();
+
                     postMessage({
                         type: "ERROR",
                         payload: `CSV 파싱 에러: ${error.message}`,
@@ -79,7 +65,6 @@ self.onmessage = async (e: MessageEvent<CsvWorkerMessageIn>) => {
                 },
             });
         } catch (err: any) {
-            stopHeartbeat();
             postMessage({
                 type: "ERROR",
                 payload: `워커 내부 에러: ${err.message}`,

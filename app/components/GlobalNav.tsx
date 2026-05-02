@@ -8,7 +8,7 @@ export default function GlobalNav() {
 
     // 💡 우리가 만든 3개의 페이지 경로 설정 (경로가 다르면 수정해주세요)
     const navItems = [
-        { name: "단일 파일 파서", path: "/" },
+        { name: "단일 파일 파서", path: "/testbed" },
         { name: "다중 파일 큐 (Multi)", path: "/testbed/multi" },
         { name: "붙여넣기 랩 (Paste)", path: "/testbed/paste" }, // 또는 /testbed/paste
     ];

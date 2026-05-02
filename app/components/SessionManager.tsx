@@ -19,7 +19,6 @@ export default function SessionManager() {
     // [2] 감지기 등록 (타이머 + 화면 포커스 감지)
     useEffect(() => {
         checkAccessToken();
-        const interval = setInterval(checkAccessToken, 1000);
 
         const handleVisibility = () => {
             if (document.visibilityState === "visible") checkAccessToken();
@@ -29,7 +28,6 @@ export default function SessionManager() {
         document.addEventListener("visibilitychange", handleVisibility);
 
         return () => {
-            clearInterval(interval);
             window.removeEventListener("focus", checkAccessToken);
             document.removeEventListener("visibilitychange", handleVisibility);
         };

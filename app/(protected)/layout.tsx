@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
     return (
         // 💡 GlobalNav나 SessionManager 없이 순수하게 자식 컴포넌트만 렌더링합니다.
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-slate-50 overflow-y-scroll">
             <SessionManager />
             {children}
         </div>
