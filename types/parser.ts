@@ -7,12 +7,14 @@ export interface ParseCompletePayload {
     sheetNames: string[];
 }
 
-export type WorkerMessageOut =
-    | { type: "HEARTBEAT" }
-    | { type: "PROGRESS"; payload: number }
-    | { type: "COMPLETE"; payload: ParseCompletePayload }
-    | { type: "ERROR"; payload: string };
+export type ParserStage = "READING" | "PARSING" | "MERGING" | "RENDERING" | "COMPLETE";
 
+export interface WorkerMessageOut {
+    type: "STAGE_UPDATE" | "COMPLETE" | "ERROR";
+    stage?: ParserStage;
+    message?: string; // 사용자에게 보여줄 친절한 메시지
+    payload?: any;
+}
 // ---------------------------------------------------------
 // 2. Main Thread -> Worker (개별 입력 타입)
 // ---------------------------------------------------------

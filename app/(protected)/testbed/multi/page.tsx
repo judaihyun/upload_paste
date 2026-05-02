@@ -13,9 +13,9 @@ export interface FileEntry {
     name: string;
     size: number;
     status: "waiting" | "processing" | "completed" | "error";
-    progress: number;
+    progress: number; // Sidebar 하위 호환성을 위해 타입은 남겨둡니다
     parseTime: number | null;
-    totalTime: number | null; // 최초 렌더링 포함 박제 시간
+    totalTime: number | null;
     allSheetsData?: Record<string, any[][]>;
     sheetNames: string[];
 }
@@ -29,11 +29,10 @@ export default function MultiTestBed() {
     const renderStartTimeRef = useRef<number>(0);
     const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
 
-    // 💡 멀티 파일 큐 전용 훅 연결
-    const { addFiles, cancelFile, isParsing } = useMultiFileParser({
+    // 💡 1. currentStageMessage 구조 분해 할당 추가
+    const { addFiles, cancelFile, isParsing, currentStageMessage } = useMultiFileParser({
         onQueueUpdate: updatedQueue => setFileQueue(updatedQueue),
         onFileComplete: (fileId, result) => {
-            // 파싱 완료 시점에 첫 번째 시트로 데이터 세팅 준비
             setFileQueue(prev =>
                 prev.map(f =>
                     f.id === fileId
@@ -47,14 +46,12 @@ export default function MultiTestBed() {
                 ),
             );
 
-            // 만약 현재 보고 있는 파일이 없다면 방금 완료된 파일을 활성화
             if (!activeFileId) handleFileSelect(fileId);
         },
     });
 
     const activeFile = fileQueue.find(f => f.id === activeFileId);
 
-    // 💡 파일/시트 스위칭 핸들러
     const handleFileSelect = (fileId: string) => {
         const file = fileQueue.find(f => f.id === fileId);
         if (!file || file.status !== "completed" || isSwitching) return;
@@ -66,7 +63,6 @@ export default function MultiTestBed() {
         setGridData([]);
 
         setTimeout(() => {
-            // 최초 로딩 박제를 위해 타이머 측정 여부 결정
             if (!file.totalTime) renderStartTimeRef.current = performance.now();
             setGridData(file.allSheetsData?.[firstSheet] || []);
         }, 50);
@@ -77,6 +73,7 @@ export default function MultiTestBed() {
         setIsSwitching(true);
         setActiveSheet(sheetName);
         setGridData([]);
+
         setTimeout(() => {
             setGridData(activeFile.allSheetsData?.[sheetName] || []);
         }, 50);
@@ -117,7 +114,6 @@ export default function MultiTestBed() {
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-hidden font-sans text-gray-900">
-            {/* 좌측 사이드바: 파일 큐 카드 리스트 */}
             <Sidebar
                 queue={fileQueue}
                 activeId={activeFileId}
@@ -132,9 +128,20 @@ export default function MultiTestBed() {
                 }}
             />
 
-            {/* 우측 메인 영역 */}
-            <main className="flex-grow flex flex-col min-w-0 bg-white shadow-inner">
+            {/* 우측 메인 영역을 relative로 설정하여 글로벌 상태 바의 기준점으로 삼습니다 */}
+            <main className="flex-grow flex flex-col min-w-0 bg-white shadow-inner relative">
+                {/* 💡 2. 글로벌 파싱 상태 표시 바 (플로팅 UI) */}
+                {isParsing && currentStageMessage && (
+                    <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-[100] bg-slate-900/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-6 duration-300 border border-slate-700">
+                        <div className="animate-spin h-5 w-5 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                        <span className="font-bold text-sm tracking-wide text-blue-50">
+                            {currentStageMessage}
+                        </span>
+                    </div>
+                )}
+
                 <Console isParsing={isParsing} memoryStats={memoryStats} />
+
                 {activeFile ? (
                     <>
                         <header className="p-5 border-b bg-white flex justify-between items-center">
@@ -155,7 +162,6 @@ export default function MultiTestBed() {
                                 </div>
                             </div>
 
-                            {/* 시트 선택 탭 */}
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {activeFile.sheetNames.map(name => (
                                     <button
@@ -198,9 +204,9 @@ export default function MultiTestBed() {
                     <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-4">
                         <div className="text-6xl animate-bounce">📁</div>
                         <p className="text-lg font-bold">
-                            파일을 업로드하거나 목록에서 선택하세요.
+                            좌측 메뉴에서 파일을 업로드하거나 목록에서 선택하세요.
                         </p>
-                        <p className="text-sm opacity-60">Excel, CSV 최대 5개 지원</p>
+                        <p className="text-sm opacity-60">Excel, CSV 대용량 병렬 파싱 지원</p>
                     </div>
                 )}
             </main>

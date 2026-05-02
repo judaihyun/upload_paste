@@ -9,23 +9,21 @@ import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 export default function PasteTestPage() {
-    // 💡 렌더링 최적화: 대용량 데이터 원본은 Ref에, UI용 메타정보만 State에 저장
     const [previewInfo, setPreviewInfo] = useState<{
         name: string;
         rowCount: number;
         colCount: number;
     } | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitStage, setSubmitStage] = useState<string>("");
     const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
 
     const dataRef = useRef<any[][]>([]);
 
-    // 💡 1. 팝업에서 파싱 완료된 데이터를 수신 (Preview)
     const handleDataParsed = useCallback((data: any[][], fileName: string) => {
         dataRef.current = data;
-
-        // 실제 데이터의 최대 열(Column) 개수 계산
         const maxCols =
             data.length > 0 ? Math.max(...data.slice(0, 100).map(row => row.length)) : 0;
 
@@ -37,49 +35,43 @@ export default function PasteTestPage() {
         setIsModalOpen(false);
     }, []);
 
-    // 💡 2. 최종 서버 제출 (Multipart/form-data 가상 파일화)
     const handleSubmit = async () => {
         if (!dataRef.current.length || !previewInfo) return;
 
-        // "전송 중..." UI를 즉시 반영하기 위해 상태 변경
         setIsSubmitting(true);
+        setSubmitStage("데이터 압축 중...");
 
-        // 🚀 브라우저 메인 스레드에 렌더링 기회를 준 뒤 무거운 작업 시작 (requestAnimationFrame 사용)
-        requestAnimationFrame(async () => {
-            try {
-                // 80MB 기준 약 2~3초 소요 (현실적 타협안)
-                const csvString = Papa.unparse(dataRef.current);
-                const blob = new Blob([csvString], { type: "text/csv" });
-                const virtualFile = new File([blob], previewInfo.name, { type: "text/csv" });
+        await new Promise(resolve => setTimeout(resolve, 50));
 
-                const formData = new FormData();
-                formData.append("file", virtualFile);
+        try {
+            const csvString = Papa.unparse(dataRef.current);
+            const blob = new Blob([csvString], { type: "text/csv" });
+            const virtualFile = new File([blob], previewInfo.name, { type: "text/csv" });
 
-                console.log(
-                    `🚀 서버 전송 시작: ${virtualFile.name} (${(blob.size / 1024 / 1024).toFixed(2)} MB)`,
-                );
-                console.log("준비된 FormData:", formData.get("file"));
-                // API 호출 시뮬레이션 (실제 엔드포인트에 맞춰 수정 가능)
-                await fetch("/api/upload", {
-                    method: "POST",
-                    body: formData,
-                });
+            setSubmitStage("서버로 전송 중...");
+            await new Promise(resolve => setTimeout(resolve, 10));
 
-                alert("서버에 가상 파일이 성공적으로 제출되었습니다.");
+            const formData = new FormData();
+            formData.append("file", virtualFile);
 
-                // 전송 완료 후 상태 초기화
-                dataRef.current = [];
-                setPreviewInfo(null);
-            } catch (err) {
-                console.error(err);
-                alert("전송 중 오류가 발생했습니다.");
-            } finally {
-                setIsSubmitting(false);
-            }
-        });
+            await fetch("/api/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            alert("서버에 가상 파일이 성공적으로 제출되었습니다.");
+
+            dataRef.current = [];
+            setPreviewInfo(null);
+        } catch (err) {
+            console.error(err);
+            alert("전송 중 오류가 발생했습니다.");
+        } finally {
+            setIsSubmitting(false);
+            setSubmitStage("");
+        }
     };
 
-    // 💡 3. 메모리 실시간 모니터링 (V8 전용)
     useEffect(() => {
         const checkMemory = () => {
             const perf = performance as any;
@@ -96,25 +88,27 @@ export default function PasteTestPage() {
     }, []);
 
     return (
-        <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900">
-            {/* 상단 GNB / 컨트롤바 */}
-            <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-10 shrink-0">
-                <div className="flex items-center gap-6">
-                    <h1 className="text-xl font-black tracking-tighter text-slate-800">
+        <div className="flex flex-col h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden">
+            {/* 💡 수정됨: 헤더 높이를 유동적으로(min-h-[64px]) 바꾸고 padding 조정 */}
+            <header className="min-h-[64px] py-3 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-sm z-10 shrink-0 gap-4">
+                {/* 좌측: 타이틀 및 프리뷰 정보 */}
+                <div className="flex items-center gap-6 min-w-0">
+                    <h1 className="text-xl font-black tracking-tighter text-slate-800 shrink-0 whitespace-nowrap">
                         PASTE LAB
                     </h1>
 
                     {previewInfo && (
-                        <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-3">
-                            <div className="h-4 w-px bg-slate-200" />
-                            <div className="flex items-center gap-2">
-                                <span className="bg-blue-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded leading-none">
+                        <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-3 min-w-0">
+                            <div className="h-4 w-px bg-slate-200 shrink-0" />
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <span className="bg-blue-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded leading-none shrink-0">
                                     PREVIEW
                                 </span>
-                                <span className="text-sm font-bold text-slate-600 truncate max-w-[240px]">
+                                {/* 💡 수정됨: 파일명은 길어지면 ... 처리되도록 쪼개고, 행/열 정보는 절대 안 찌그러지게 보호(shrink-0) */}
+                                <span className="text-sm font-bold text-slate-600 truncate max-w-[200px]">
                                     {previewInfo.name}
                                 </span>
-                                <span className="text-xs font-mono text-slate-400">
+                                <span className="text-xs font-mono text-slate-400 shrink-0 whitespace-nowrap">
                                     ({previewInfo.rowCount.toLocaleString()} Rows ×{" "}
                                     {previewInfo.colCount} Cols)
                                 </span>
@@ -123,12 +117,14 @@ export default function PasteTestPage() {
                     )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <Console isParsing={false} memoryStats={memoryStats} />
+                {/* 우측: 액션 버튼들 */}
+                <div className="flex items-center gap-3 shrink-0">
+                    {/* ❌ 💡 수정됨: 여기에 있던 <Console /> 컴포넌트를 아래의 <main> 영역 안으로 이동시켰습니다. */}
 
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition-all flex items-center gap-2 border border-slate-200"
+                        disabled={isSubmitting}
+                        className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 border border-slate-200 disabled:opacity-50 whitespace-nowrap"
                     >
                         <span>📋</span> 표 데이터 붙여넣기
                     </button>
@@ -137,13 +133,13 @@ export default function PasteTestPage() {
                         <button
                             onClick={handleSubmit}
                             disabled={isSubmitting}
-                            className={`px-5 py-2 bg-blue-600 text-white text-sm font-black rounded-lg shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95 flex items-center gap-2 
-                                ${isSubmitting ? "opacity-50 cursor-not-allowed" : ""}`}
+                            className={`h-10 px-5 bg-blue-600 text-white text-sm font-black rounded-lg shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 whitespace-nowrap
+                                ${isSubmitting ? "opacity-90 cursor-wait bg-blue-700" : "hover:bg-blue-700 active:scale-95"}`}
                         >
                             {isSubmitting ? (
                                 <>
-                                    <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    전송 중...
+                                    <div className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                                    {submitStage}
                                 </>
                             ) : (
                                 "서버로 최종 제출 🚀"
@@ -154,7 +150,10 @@ export default function PasteTestPage() {
             </header>
 
             {/* 메인 렌더링 영역 */}
-            <main className="flex-grow p-6 overflow-hidden flex flex-col min-h-0">
+            <main className="flex-grow p-6 overflow-hidden flex flex-col min-h-0 relative">
+                {/* 💡 수정됨: Console 컴포넌트는 메인 영역에서 독립적으로 Floating 되도록 이동 */}
+                <Console isParsing={false} memoryStats={memoryStats} />
+
                 <div className="flex-grow bg-white rounded-2xl border border-slate-200 shadow-inner overflow-hidden relative flex flex-col">
                     {previewInfo ? (
                         <CellRenderer
@@ -181,7 +180,6 @@ export default function PasteTestPage() {
                 </div>
             </main>
 
-            {/* 입력 모달 (비즈니스 로직 분리) */}
             <PasteModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}

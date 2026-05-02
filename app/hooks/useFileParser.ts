@@ -1,23 +1,24 @@
 // hooks/useFileParser.ts
 import { useState, useRef, useCallback, useEffect } from "react";
-import { WorkerMessageOut, ParseCompletePayload } from "@/types/parser"; // 불필요한 MessageIn 타입들 제거 가능
+import { WorkerMessageOut, ParseCompletePayload } from "@/types/parser";
 
 interface UseFileParserProps {
     onSuccess: (result: ParseCompletePayload & { parseTime: number }) => void;
     onError: (error: string) => void;
 }
 
-// 💡 1. 절대 타임아웃 기준 시간 (3분 = 180초)
+// 💡 1. 유저 설정 하드 타임아웃 (80초)
 const HARD_TIMEOUT_MS = 80 * 1000;
 
 export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
     const [isParsing, setIsParsing] = useState(false);
-    const [progress, setProgress] = useState(0);
+    // 💡 2. 숫자 진행률 대신 텍스트 상태 메시지 도입
+    const [currentStageMessage, setCurrentStageMessage] = useState<string>("");
 
     const workerRef = useRef<Worker | null>(null);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 💡 2. 파싱 강제 취소 및 타이머 해제
+    // 파싱 강제 취소 및 리소스 정리
     const terminateWorker = useCallback(() => {
         if (workerRef.current) {
             workerRef.current.postMessage({ action: "CANCEL" });
@@ -30,8 +31,8 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
             timeoutRef.current = null;
         }
 
-        setProgress(0);
         setIsParsing(false);
+        setCurrentStageMessage(""); // 메시지 초기화
         console.log("Worker 강제 종료 완료 및 상태 초기화");
     }, []);
 
@@ -42,7 +43,7 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
     // 메인 파싱 실행 함수
     const parseFile = async (file: File) => {
         setIsParsing(true);
-        setProgress(0);
+        setCurrentStageMessage("파일을 준비 중입니다..."); // 💡 초기 상태 메세지
         const startTime = performance.now();
 
         try {
@@ -62,9 +63,9 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
                 throw new Error("지원하지 않는 파일 형식입니다.");
             }
 
-            // 💡 3. 하드 타임아웃 작동 (시작 시 딱 1번만 실행)
+            // 하드 타임아웃 작동
             timeoutRef.current = setTimeout(() => {
-                console.error("Hard Timeout! 파싱 시간이 3분을 초과했습니다.");
+                console.error("Hard Timeout! 파싱 시간이 초과되었습니다.");
                 terminateWorker();
                 onError("파싱 처리 시간이 초과되었습니다. 파일 크기를 줄이거나 다시 시도해주세요.");
             }, HARD_TIMEOUT_MS);
@@ -73,21 +74,29 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
             workerRef.current.onmessage = (event: MessageEvent<WorkerMessageOut>) => {
                 const data = event.data;
 
-                // 💡 4. 복잡한 HEARTBEAT 케이스 완전 삭제
                 switch (data.type) {
-                    case "PROGRESS":
-                        setProgress(data.payload);
+                    case "STAGE_UPDATE":
+                        // 💡 3. 워커에서 올라온 텍스트 상태로 UI 업데이트 (리렌더링 최소화)
+                        if (data.message) {
+                            setCurrentStageMessage(data.message);
+                        }
                         break;
+
                     case "COMPLETE":
-                        // 성공 시 무조건 타이머 먼저 해제
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                        setProgress(100);
-                        onSuccess({
-                            ...data.payload,
-                            parseTime: performance.now() - startTime,
-                        });
-                        terminateWorker();
+
+                        // 💡 4. 렌더링 단계 진입: 메인 스레드 블로킹 전 UI Paint 양보
+                        setCurrentStageMessage("화면에 데이터를 렌더링하는 중입니다...");
+
+                        setTimeout(() => {
+                            onSuccess({
+                                ...data.payload,
+                                parseTime: performance.now() - startTime,
+                            });
+                            terminateWorker();
+                        }, 50);
                         break;
+
                     case "ERROR":
                         terminateWorker();
                         onError(data.payload);
@@ -116,7 +125,7 @@ export function useFileParser({ onSuccess, onError }: UseFileParserProps) {
 
     return {
         isParsing,
-        progress,
+        currentStageMessage, // 💡 progress 대신 export
         parseFile,
         cancelParsing: terminateWorker,
     };

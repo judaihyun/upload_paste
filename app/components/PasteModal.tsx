@@ -11,22 +11,21 @@ interface PasteModalProps {
 export default function PasteModal({ isOpen, onClose, onDataParsed }: PasteModalProps) {
     const textRef = useRef<HTMLTextAreaElement>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [progress, setProgress] = useState(0);
+
+    // 💡 1. 진행률 숫자(%) 대신 텍스트 상태 메시지 도입
+    const [stageMessage, setStageMessage] = useState<string>("");
 
     // 모달이 열릴 때 상태 초기화 및 자동 포커스
     useEffect(() => {
         if (isOpen) {
-            setProgress(0);
+            setStageMessage("");
             setIsProcessing(false);
-            // 모달 애니메이션이 끝날 즈음 포커스 부여
             setTimeout(() => textRef.current?.focus(), 50);
         }
     }, [isOpen]);
 
-    // 💡 HTML 메타데이터에서 병합된 셀(colspan/rowspan >= 2)을 감지하는 함수
     const hasMergedCellsInClipboard = (htmlData: string): boolean => {
         if (!htmlData) return false;
-        // 엑셀 등에서 복사된 HTML 테이블 내에 값이 2 이상인 colspan 또는 rowspan이 존재하는지 스캔
         const mergePattern = /(?:colspan|rowspan)\s*=\s*["']?(?:[2-9]|\d{2,})["']?/i;
         return mergePattern.test(htmlData);
     };
@@ -34,9 +33,8 @@ export default function PasteModal({ isOpen, onClose, onDataParsed }: PasteModal
     const handlePaste = (e: React.ClipboardEvent) => {
         const types = Array.from(e.clipboardData.types);
 
-        // 1. 병합 셀 방어 로직 (HTML 메타데이터 스캔)
+        // 1. 병합 셀 방어 로직
         if (types.includes("text/html")) {
-            // 성능 방어를 위해 HTML 텍스트를 앞의 5만 자까지만 자름 (정규식 병목 방지)
             const htmlData = e.clipboardData.getData("text/html").slice(0, 50000);
 
             if (hasMergedCellsInClipboard(htmlData)) {
@@ -44,57 +42,54 @@ export default function PasteModal({ isOpen, onClose, onDataParsed }: PasteModal
                     "⚠️ 병합된 셀이 포함된 표는 붙여넣을 수 없습니다. 병합을 해제한 후 다시 복사해주세요.",
                 );
                 setIsProcessing(false);
-                e.preventDefault(); // 붙여넣기 이벤트 취소
-                return; // 여기서 함수 즉시 종료 (파싱 진행 안 함)
+                e.preventDefault();
+                return;
             }
         }
+
         const plainText = e.clipboardData.getData("text/plain");
 
         if (!plainText || plainText.trim() === "") {
             alert(
                 "⚠️ 붙여넣기에 실패했습니다.\n\n" +
-                    "클립보드에 텍스트가 없거나, 데이터가 너무 커서(약 50MB 초과) 브라우저가 처리를 거부했습니다.\n\n" +
+                    "클립보드에 텍스트가 없거나 데이터가 너무 큽니다.\n\n" +
                     "대용량 데이터는 팝업을 닫고 [파일 추가] 기능을 이용해 주세요.",
             );
             setIsProcessing(false);
             return;
         }
-        // 2. 검증을 통과했으므로 파싱 상태로 진입
+
+        // 2. 검증 통과 -> 파싱 상태 진입
         setIsProcessing(true);
-        setProgress(0);
+        setStageMessage("클립보드 데이터를 분석하고 있습니다..."); // 💡 초기 상태
 
         // 3. Worker 스트리밍을 위해 원시 텍스트를 가상의 File 객체로 래핑
         const file = new File([plainText], "pasted.csv", { type: "text/plain" });
-        const totalSize = file.size;
         const allData: any[][] = [];
 
-        // 4. PapaParse Worker 실행
+        // 4. PapaParse 내부 Worker 실행
         Papa.parse(file, {
-            worker: true, // 메인 스레드 프리징 완벽 차단
-            chunkSize: 1024 * 1024 * 2, // 2MB 단위로 쪼개서 스트리밍 파싱
-            skipEmptyLines: true, // 빈 줄 무시
+            worker: true,
+            chunkSize: 1024 * 1024 * 2, // 2MB 단위
+            skipEmptyLines: true,
             chunk: results => {
-                // 파싱된 chunk 데이터를 원시 배열에 누적 (Zero-Copy 지향, 객체 변환 안 함)
+                // 💡 진행률(%) 계산 및 상태 업데이트 로직 완벽 삭제 -> 리렌더링 차단
                 const chunkData = results.data as any[][];
                 for (let i = 0; i < chunkData.length; i++) {
                     allData.push(chunkData[i]);
                 }
-
-                // 실제 처리된 파일 바이트(cursor)를 기준으로 진행률(%) 산출
-                const currentBytes = results.meta.cursor;
-                const percent = Math.min(99, Math.round((currentBytes / totalSize) * 100));
-                setProgress(percent);
             },
             complete: () => {
-                // 파싱 100% 완료 처리
-                setProgress(100);
+                // 💡 [Stage 2] 파싱 완료 및 렌더링 대기
+                setStageMessage("화면에 데이터를 렌더링하는 중입니다...");
 
-                // 100% UI 애니메이션을 사용자가 인식할 수 있도록 0.4초 대기 후 부모로 데이터 전달
+                // 🚀 핵심 방어 로직: 부모 컴포넌트(TestBed)로 수십만 줄의 데이터를 넘기기 전에,
+                // 브라우저가 위 메시지를 화면에 그릴 수 있도록 50ms 양보 (Event Loop Yielding)
                 setTimeout(() => {
                     const virtualName = `pasted_${Date.now()}.csv`;
                     onDataParsed(allData, virtualName);
                     onClose();
-                }, 400);
+                }, 50);
             },
             error: () => {
                 alert("파싱 중 오류가 발생했습니다.");
@@ -130,26 +125,17 @@ export default function PasteModal({ isOpen, onClose, onDataParsed }: PasteModal
                         ${isProcessing ? "border-transparent" : "border-dashed border-gray-200 focus-within:border-blue-500 focus-within:bg-white focus-within:shadow-inner"}`}
                     >
                         {isProcessing ? (
-                            // 진행률 바 (Progress Bar) UI
+                            // 💡 최적화된 상태 표시 바 (Progress Bar 제거)
                             <div className="w-full px-12 flex flex-col items-center gap-4 animate-in zoom-in-95">
-                                <div className="text-4xl animate-bounce">⚙️</div>
-
-                                <div className="w-full">
-                                    <div className="flex justify-between text-sm font-black text-gray-600 mb-2 tracking-wider">
-                                        <span>ANALYZING DATA...</span>
-                                        <span className="text-blue-600">{progress}%</span>
-                                    </div>
-                                    <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
-                                        <div
-                                            className="h-full bg-blue-600 rounded-full transition-all duration-300 ease-out"
-                                            style={{ width: `${progress}%` }}
-                                        />
-                                    </div>
+                                <div className="animate-spin h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full mb-1"></div>
+                                <div className="flex flex-col items-center text-center">
+                                    <span className="text-sm font-black text-blue-800 tracking-wider mb-2">
+                                        {stageMessage}
+                                    </span>
+                                    <p className="text-xs font-bold text-gray-400">
+                                        브라우저 메모리에 최적화 중입니다
+                                    </p>
                                 </div>
-
-                                <p className="text-xs font-bold text-gray-400 mt-2">
-                                    브라우저 메모리에 최적화 중입니다
-                                </p>
                             </div>
                         ) : (
                             // 입력 대기 (Textarea) UI

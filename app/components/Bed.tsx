@@ -1,8 +1,8 @@
 "use client";
-import React, { useState, useEffect, useRef, useTransition } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Console, { MemoryStats } from "@/components/Console";
 import CellRenderer from "@/components/CellRenderer";
-import ProgressBar from "./ProgressBar";
+// import ProgressBar from "./ProgressBar"; // 💡 삭제 가능: 더 이상 무거운 프로그레스 바를 쓰지 않습니다.
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import { useFileParser } from "@/hooks/useFileParser";
 
@@ -12,12 +12,10 @@ export default function TestBed() {
     const [memoryStats, setMemoryStats] = useState<MemoryStats | null>(null);
     const [isSwitching, setIsSwitching] = useState(false);
 
-    // 💡 타이머 상태 유지
     const [timing, setTiming] = useState<{ parse: number; render: number; total: number } | null>(
         null,
     );
     const renderStartTimeRef = useRef<number>(0);
-
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [gridData, setGridData] = useState<any[][]>([]);
@@ -26,9 +24,9 @@ export default function TestBed() {
     const [activeSheet, setActiveSheet] = useState<string>("");
     const [sheetDataCache, setSheetDataCache] = useState<Record<string, any[][]>>({});
 
-    const { isParsing, progress, parseFile, cancelParsing } = useFileParser({
+    // 💡 1. progress 대신 currentStageMessage를 구조 분해 할당으로 가져옵니다.
+    const { isParsing, currentStageMessage, parseFile, cancelParsing } = useFileParser({
         onSuccess: ({ allSheetsData, parseTime, sheetNames }) => {
-            // 💡 1. 파일이 최초 인입될 때만 타이머를 초기화하고 렌더 시간 측정을 시작합니다.
             setTiming({ parse: parseTime, render: 0, total: 0 });
             renderStartTimeRef.current = performance.now();
 
@@ -78,7 +76,7 @@ export default function TestBed() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const MAX_FILE_SIZE = 2048 * 1024 * 1024;
+        const MAX_FILE_SIZE = 2048 * 1024 * 1024; // 2GB
         if (file.size > MAX_FILE_SIZE) {
             alert(`파일이 너무 큽니다. (현재: ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
             if (fileInputRef.current) fileInputRef.current.value = "";
@@ -98,8 +96,6 @@ export default function TestBed() {
         setGridData([]);
 
         setTimeout(() => {
-            // 💡 2. 시트를 스위칭할 때는 renderStartTimeRef를 다시 기록하지 않습니다.
-            // 오로지 데이터 세팅만 수행하여 타이머에 영향을 주지 않도록 격리합니다.
             setGridData(sheetDataCache[sheetName] || []);
         }, 50);
     };
@@ -120,10 +116,7 @@ export default function TestBed() {
     const handleRenderComplete = () => {
         if (renderStartTimeRef.current > 0) {
             const renderTime = performance.now() - renderStartTimeRef.current;
-
             setTiming(prev => {
-                // 💡 3. 핵심: 최초 렌더링일 때(prev.render === 0)만 업데이트합니다.
-                // 이미 값이 있다면(시트 스위칭으로 인한 렌더링 완료 시) 이전 상태를 그대로 반환하여 박제합니다.
                 if (prev && prev.render === 0) {
                     return {
                         ...prev,
@@ -135,7 +128,6 @@ export default function TestBed() {
             });
             renderStartTimeRef.current = 0;
         }
-
         setIsSwitching(false);
     };
 
@@ -145,7 +137,7 @@ export default function TestBed() {
                 <header>
                     <h2 className="text-2xl font-bold text-gray-800">🧪 성능 최적화 실험 베드</h2>
                     <p className="text-gray-500 text-sm">
-                        Large-scale Excel I/O Performance Analysis
+                        Large-scale Data I/O Performance Analysis
                     </p>
                 </header>
 
@@ -154,15 +146,9 @@ export default function TestBed() {
                         <label className="text-sm font-medium text-gray-700">
                             테스트 파일 업로드 (Max 2GB)
                         </label>
-                        {isParsing && (
-                            <button
-                                onClick={handleCancel}
-                                className="text-xs px-3 py-1 bg-red-50 text-red-600 font-bold border border-red-200 rounded hover:bg-red-100 transition-colors"
-                            >
-                                파싱 취소 🛑
-                            </button>
-                        )}
+                        {/* 기존에 있던 취소 버튼 위치를 아래쪽 Status Bar로 통합하여 헤더를 깔끔하게 유지합니다. */}
                     </div>
+
                     <input
                         type="file"
                         accept=".xlsx, .csv"
@@ -171,7 +157,24 @@ export default function TestBed() {
                         disabled={isParsing}
                         className="block w-full text-sm text-gray-500 mb-2 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    <ProgressBar progress={progress} isVisible={isParsing} />
+
+                    {/* 💡 2. 프로그레스 바를 대체하는 심플한 텍스트 기반 상태 표시기 */}
+                    {isParsing && (
+                        <div className="mt-3 flex items-center justify-between bg-blue-50/50 border border-blue-100 px-4 py-3 rounded-md animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex items-center gap-3">
+                                <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                                <span className="text-sm font-bold text-blue-800">
+                                    {currentStageMessage}
+                                </span>
+                            </div>
+                            <button
+                                onClick={handleCancel}
+                                className="text-xs px-3 py-1.5 bg-white text-red-600 font-bold border border-red-200 rounded hover:bg-red-50 transition-colors shadow-sm"
+                            >
+                                파싱 취소 🛑
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <Console memoryStats={memoryStats} isParsing={isParsing} />
@@ -192,7 +195,6 @@ export default function TestBed() {
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
-                                {/* 💡 박제된 최초 인입 타이머 UI */}
                                 {timing && timing.total > 0 && (
                                     <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 mr-2">
                                         <span className="text-xs font-semibold text-emerald-600 uppercase tracking-tighter">
@@ -201,7 +203,7 @@ export default function TestBed() {
                                         <span className="text-sm font-mono font-bold text-emerald-700">
                                             {(timing.total / 1000).toFixed(2)}s
                                         </span>
-                                        <span className="text-xs font-mono text-emerald-600/70">
+                                        <span className="text-xs font-mono text-emerald-600/70 hidden sm:inline">
                                             (Parse: {(timing.parse / 1000).toFixed(2)}s + Render:{" "}
                                             {(timing.render / 1000).toFixed(2)}s)
                                         </span>
