@@ -11,6 +11,7 @@ export default function GlobalNav() {
         { name: "단일 파일 파서", path: "/testbed" },
         { name: "다중 파일 큐 (Multi)", path: "/testbed/multi" },
         { name: "붙여넣기 랩 (Paste)", path: "/testbed/paste" }, // 또는 /testbed/paste
+        { name: "서버사이드 렌더링", path: "/testbed/serverside" }, // 또는 /testbed/serverside
     ];
 
     // 인증 관련 팝업/콜백 화면에서는 GNB를 숨깁니다.

@@ -1,33 +1,33 @@
 {
-  "name": "testbed",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "ag-grid-community": "^35.2.1",
-    "ag-grid-react": "^35.2.1",
-    "next": "16.2.4",
-    "papaparse": "^5.5.3",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "react-virtualized": "^9.22.6",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/papaparse": "^5.5.2",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/react-virtualized": "^9.22.3",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
+    "name": "testbed",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "eslint"
+    },
+    "dependencies": {
+        "ag-grid-enterprise": "^35.2.1",
+        "ag-grid-react": "^35.2.1",
+        "next": "16.2.4",
+        "papaparse": "^5.5.3",
+        "react": "19.2.4",
+        "react-dom": "19.2.4",
+        "react-virtualized": "^9.22.6",
+        "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4",
+        "@types/node": "^20",
+        "@types/papaparse": "^5.5.2",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "@types/react-virtualized": "^9.22.3",
+        "eslint": "^9",
+        "eslint-config-next": "16.2.4",
+        "tailwindcss": "^4",
+        "typescript": "^5"
+    }
 }

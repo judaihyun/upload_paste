@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 export async function POST() {
     const newAccessToken = `access_${Date.now()}`;
-    const expiresInSeconds = 600; // 10분 만료 테스트
+    const expiresInSeconds = 6000; // 100분 만료 테스트
 
     const response = NextResponse.json({ success: true });
 
