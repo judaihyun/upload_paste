@@ -1,5 +1,6 @@
 "use client";
 import DataWidget from "@/components/DataWidget";
+import KpiAgentGrid from "@/components/KpiAgent/ui/KpiAgentGrid";
 import { useState } from "react";
 
 // 타입을 명확히 정의합니다.
@@ -75,7 +76,7 @@ export default function ChatPage() {
         },
 
         // --- 스크롤 테스트를 위한 대량의 일반 대화 추가 ---
-        ...Array.from({ length: 50 }).map((_, i) => ({
+        ...Array.from({ length: 5 }).map((_, i) => ({
             id: `dummy-${i}`,
             role: i % 2 === 0 ? "user" : "assistant",
             content:
@@ -151,7 +152,7 @@ export default function ChatPage() {
                     {/* 그리드/차트 위젯 영역 (펼쳐졌을 때만 렌더링) */}
                     {msg.isExpanded && (
                         <div className="w-full bg-white p-4 rounded-xl shadow-md border animate-in fade-in duration-300">
-                            <DataWidget
+                            <KpiAgentGrid
                                 messageId={msg.id}
                                 // initialSnapshot={msg.gridSnapshot}
                             />

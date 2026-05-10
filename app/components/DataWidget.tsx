@@ -9,6 +9,7 @@ import {
     FirstDataRenderedEvent,
     ChartToolPanelsDef,
     SideBarDef,
+    ValidationModule,
 } from "ag-grid-enterprise";
 import { AgChartsEnterpriseModule } from "ag-charts-enterprise";
 import { AgGridProvider, AgGridReact } from "ag-grid-react";
@@ -100,10 +101,34 @@ export default function DataWidget({ messageId }: DataWidgetProps) {
 
     const sideBarConfig: SideBarDef = useMemo(
         () => ({
-            /* 생략 (이전과 동일) */
+            toolPanels: [
+                {
+                    id: "columns",
+                    labelDefault: "Columns",
+                    labelKey: "columns",
+                    iconKey: "columns", // ag-Grid 내장 아이콘
+                    toolPanel: "agColumnsToolPanel",
+                },
+                {
+                    id: "filters",
+                    labelDefault: "Filters",
+                    labelKey: "filters",
+                    iconKey: "filter", // ag-Grid 내장 아이콘
+                    toolPanel: "agFiltersToolPanel",
+                },
+                {
+                    id: "customToolPanel",
+                    labelDefault: "Custom Tool Panel",
+                    labelKey: "customToolPanel",
+                    iconKey: "menu",
+                    toolPanel: CustomToolPanel,
+                },
+            ],
+            defaultToolPanel: "customToolPanel", // 처음에 열려있을 패널 ID
         }),
         [],
     );
+
     const chartToolPanelsDef: ChartToolPanelsDef = useMemo(
         () => ({ defaultToolPanel: "settings" }),
         [],
@@ -115,6 +140,7 @@ export default function DataWidget({ messageId }: DataWidgetProps) {
                 modules={[
                     AllEnterpriseModule,
                     IntegratedChartsModule.with(AgChartsEnterpriseModule),
+                    ValidationModule,
                 ]}
                 licenseKey={AG_GRID_KEY}
             >
