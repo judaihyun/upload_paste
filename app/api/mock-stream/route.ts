@@ -7,9 +7,14 @@ export const runtime = "edge";
 const FAKE_SCHEMA_PAYLOAD = {
     title: "KPI 에이전트 분석 결과",
     columns: [
-        { field: "category", headerName: "분류", type: "string" },
-        { field: "value", headerName: "달성률", type: "number" },
-        { field: "status", headerName: "상태", type: "string" },
+        { field: "athlete", headerName: "분류", type: "string" },
+        { field: "age", headerName: "달성률", type: "number" },
+        { field: "country", headerName: "상태", type: "string" },
+        { field: "year", headerName: "year", type: "string" },
+        { field: "date", headerName: "date", type: "string" },
+        { field: "sport", headerName: "sport", type: "string" },
+        { field: "gold", headerName: "gold", type: "string" },
+        { field: "silver", headerName: "silver", type: "string" },
     ],
     metadata: {
         generatedAt: new Date().toISOString(),

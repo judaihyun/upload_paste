@@ -4,17 +4,17 @@ import { GridReadyEvent, IServerSideDatasource } from "ag-grid-enterprise";
 import { AgentAdapter } from "./adapter/agent.adapter";
 import { WidgetMockService } from "./mock.service";
 
-export function useWidgetManager(messageId: string) {
+export function useWidgetManager(messageId: string, initialViewSpec?: any) {
     const [columnDefs, setColumnDefs] = useState<any[]>([]);
     const [domLayout, setDomLayout] = useState<"normal" | "autoHeight">("normal");
 
     useEffect(() => {
-        WidgetMockService.fetchInitialSchema(messageId).then(firstRow => {
-            // 어댑터를 통해 AG Grid 언어로 번역 후 렌더링
-            const dynamicColumns = AgentAdapter.toColumnDefs(firstRow);
-            setColumnDefs(dynamicColumns);
-        });
-    }, [messageId]);
+        // 어댑터를 통해 AG Grid 언어로 번역 후 렌더링
+        console.log("초기 ViewSpec:", initialViewSpec);
+        const dynamicColumns = AgentAdapter.toColumnDefs(initialViewSpec.columns);
+        console.log(dynamicColumns);
+        setColumnDefs(dynamicColumns);
+    }, [initialViewSpec]);
 
     const onPaginationChanged = useCallback((params: any) => {
         const pageSize = params.api.paginationGetPageSize();

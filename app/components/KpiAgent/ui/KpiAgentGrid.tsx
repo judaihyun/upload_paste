@@ -25,15 +25,7 @@ export default function KpiAgentGrid({ messageId, initialViewSpec }: KpiAgentGri
     const gridRef = useRef<AgGridReact>(null);
 
     const { domLayout, onGridReady, columnDefs, onPaginationChanged, detailCellRendererParams } =
-        useWidgetManager(messageId);
-
-    // 초기 ViewSpec이 제공되었을 경우, columnDefs를 업데이트
-    useEffect(() => {
-        if (initialViewSpec) {
-            // columnDefs 업데이트 로직 추가
-            console.log("초기 ViewSpec이 제공되었습니다:", initialViewSpec);
-        }
-    }, [initialViewSpec]);
+        useWidgetManager(messageId, initialViewSpec);
 
     return (
         <div className="flex-col w-full">
