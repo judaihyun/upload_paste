@@ -8,7 +8,7 @@ export interface StandardDataRequest {
 }
 
 // 2. 부모(Master) 데이터 응답 스펙
-export interface StandardDataResponse<T = Record<string, unknown>> {
+export interface StandardDataResponse<T = any> {
     data: T[];
     totalCount: number;
     schema: string[]; // 동적 컬럼용 키 배열
