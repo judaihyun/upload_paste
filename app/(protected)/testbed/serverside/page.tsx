@@ -1,129 +1,155 @@
 "use client";
-import DataWidget from "@/components/DataWidget";
-import KpiAgentGrid from "@/components/KpiAgent/ui/KpiAgentGrid";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+// import DataWidget from "@/components/DataWidget";
+// import KpiAgentGrid from "@/components/KpiAgent/ui/KpiAgentGrid";
+import { useLlmStream } from "@/components/KpiAgent/useLlmStream";
+import KpiAgentGrid from "@/components/KpiAgent";
 
-// 타입을 명확히 정의합니다.
-interface ChatMessage {
+// 1. 기존 타입 유지 + 스트리밍 플래그 추가
+export interface ChatMessage {
     id: string;
     role: "user" | "assistant";
     content: string;
-    gridData?: any[]; // 이 메시지에 포함된 그리드 데이터
-    isExpanded: boolean; // 그리드가 펼쳐져 있는지 여부
-    gridSnapshot?: any; // (지난번에 논의한) 필터, 정렬 백업본
+    gridData?: any[];
+    isExpanded: boolean;
+    gridSnapshot?: any;
+
+    // 🌟 추가됨: 이 메시지가 현재 스트리밍 대상인지 여부
+    isStreamingPending?: boolean;
+    // 🌟 추가됨: 백엔드에서 확정되어 내려온 스펙 (과거 대화용)
+    viewSpec?: any;
 }
 
+// 🌟 2. 렌더링 격리용 하위 컴포넌트 (핵심)
+// 배열 전체가 리렌더링되는 것을 막기 위해 스트리밍 로직은 이 안에서만 돕니다.
+const ChatMessageRow = ({
+    msg,
+    toggleGrid,
+}: {
+    msg: ChatMessage;
+    toggleGrid: (id: string) => void;
+}) => {
+    // 스트림 훅 연결
+    const {
+        text,
+        viewSpec: streamedViewSpec,
+        isStreaming,
+        reasoningText,
+        startStream,
+    } = useLlmStream();
+    const hasStarted = useRef(false);
+
+    // 마운트 시 이 메시지가 '스트리밍 대기' 상태라면 스트림 시작
+    useEffect(() => {
+        if (msg.isStreamingPending && !hasStarted.current) {
+            hasStarted.current = true;
+            startStream(msg.id);
+        }
+    }, [msg.isStreamingPending, msg.id, startStream]);
+
+    // 노출할 텍스트 결정 (스트리밍 중이면 스트림 텍스트, 과거 대화면 확정 텍스트)
+    const displayText = msg.isStreamingPending ? text : msg.content;
+
+    // 노출할 스펙 결정 (스트리밍 파싱 스펙 vs 과거 DB에 저장된 스펙)
+    const effectiveViewSpec = msg.isStreamingPending ? streamedViewSpec : msg.viewSpec;
+
+    return (
+        <div className="flex flex-col gap-2">
+            {/* 말풍선 영역 */}
+            <div
+                className={`p-4 rounded-lg w-fit max-w-[80%] ${
+                    msg.role === "user"
+                        ? "bg-blue-500 text-white self-end"
+                        : "bg-white self-start shadow-sm"
+                }`}
+            >
+                {/* 1. 추론 과정 UI (스트리밍 중에만 노출) */}
+                {reasoningText && msg.isStreamingPending && (
+                    <div className="mb-3 p-2 bg-slate-50 text-slate-500 text-xs font-mono rounded border border-slate-100 whitespace-pre-wrap">
+                        <span className="font-bold text-slate-600 block mb-1">🧠 추론 중...</span>
+                        {reasoningText}
+                    </div>
+                )}
+
+                {/* 2. 메인 텍스트 영역 */}
+                <div className="whitespace-pre-wrap leading-relaxed">
+                    {/* 마크다운 펜스 블록 화면 숨김 처리 (정규식 치환) */}
+                    {displayText.replace(/```kpi_agent[\s\S]*?```/g, "")}
+                    {isStreaming && (
+                        <span className="animate-pulse inline-block ml-1 w-2 h-4 bg-blue-500 align-middle" />
+                    )}
+                </div>
+
+                {/* 3. 데이터 분석 토글 버튼 (AI 응답이고, 스펙이 존재할 때만 노출) */}
+                {msg.role === "assistant" && effectiveViewSpec && !isStreaming && (
+                    <button
+                        onClick={() => toggleGrid(msg.id)}
+                        className="mt-3 text-xs underline opacity-70 text-blue-600 font-medium hover:opacity-100 transition-opacity block"
+                    >
+                        {msg.isExpanded ? "데이터 닫기" : "데이터 분석 보기"}
+                    </button>
+                )}
+            </div>
+
+            {/* 4. 그리드 위젯 렌더링 영역 */}
+            {/* 스트리밍 중 스펙이 튀어나왔거나(자동 펼침), 유저가 펼치기를 눌렀을 때 */}
+            {(msg.isExpanded || (msg.isStreamingPending && effectiveViewSpec)) && (
+                <div className="w-full bg-white p-4 rounded-xl shadow-md border animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {/* KpiAgentGrid가 import 되어있다고 가정하고 더미 div로 대체합니다 */}
+                    <KpiAgentGrid messageId={msg.id} initialViewSpec={effectiveViewSpec} />
+                </div>
+            )}
+        </div>
+    );
+};
+
+// =====================================================================
+// 메인 페이지 컴포넌트
+// =====================================================================
 export default function ChatPage() {
-    const [messages, setMessages] = useState([
-        {
-            id: "1",
-            role: "assistant",
-            content: "안녕하세요! 어떤 데이터를 분석해 드릴까요?",
-            isExpanded: false,
-        },
-        {
-            id: "2",
-            role: "user",
-            content: "최근 올림픽 우승자들의 통계 데이터를 보고 싶어.",
-            isExpanded: false,
-        },
-        {
-            id: "3",
-            role: "assistant",
-            content: "네, 요청하신 올림픽 데이터를 가져왔습니다. 아래에서 상세 내용을 확인하세요.",
-            isExpanded: false, // 첫 데이터는 바로 보이게 설정
-            gridData: [],
-        },
-        {
-            id: "4",
-            role: "user",
-            content: "여기서 20대 선수들만 필터링해줄 수 있어?",
-            isExpanded: false,
-        },
-        {
-            id: "5",
-            role: "assistant",
-            content:
-                "필터 조종기 탭을 이용하시거나, Age 컬럼의 필터 메뉴를 통해 20세에서 29세 사이를 설정하시면 실시간으로 서버에서 데이터를 가져옵니다.",
-            isExpanded: false,
-        },
-        {
-            id: "6",
-            role: "user",
-            content: "알겠어. 다른 종목 데이터도 추가해줘.",
-            isExpanded: false,
-        },
-        {
-            id: "7",
-            role: "assistant",
-            content:
-                "데이터 업데이트가 완료되었습니다. 현재 총 8,618건의 레코드가 로드되어 있습니다.",
-            isExpanded: false,
-            gridData: [],
-        },
-        {
-            id: "8",
-            role: "user",
-            content: "데이터가 너무 많은데 성능은 괜찮나?",
-            isExpanded: false,
-        },
-        {
-            id: "9",
-            role: "assistant",
-            content:
-                "본 시스템은 SSRM(Server-Side Row Model)을 사용하여 100만 건 이상의 데이터도 브라우저 메모리 부하 없이 페이징 처리합니다.",
-            isExpanded: false,
-        },
-
-        // --- 스크롤 테스트를 위한 대량의 일반 대화 추가 ---
-        ...Array.from({ length: 5 }).map((_, i) => ({
-            id: `dummy-${i}`,
-            role: i % 2 === 0 ? "user" : "assistant",
-            content:
-                `${i + 10}번째 추가 질문/답변입니다. 가상화 리스트가 제대로 동작하는지 확인하기 위한 긴 대화 내용입니다. `.repeat(
-                    2,
-                ),
-            isExpanded: true,
-        })),
-
-        // --- 하단에 다시 데이터 위젯 포함 응답 추가 ---
-        {
-            id: "25",
-            role: "assistant",
-            content: "마지막으로 요청하신 국가별 금메달 합계 분석 결과입니다.",
-            isExpanded: false,
-            gridData: [],
-        },
-        {
-            id: "26",
-            role: "user",
-            content: "차트가 자동으로 그려지는지 확인해볼게.",
-            isExpanded: false,
-        },
-        {
-            id: "27",
-            role: "assistant",
-            content: "네, 데이터 렌더링 직후 하단 컨테이너에 차트가 자동으로 생성됩니다.",
-            isExpanded: false,
-            gridData: [],
-        },
-        { id: "28", role: "user", content: "수고했어.", isExpanded: false },
-        {
-            id: "29",
-            role: "assistant",
-            content: "언제든 필요한 분석이 있으면 말씀해 주세요!",
-            isExpanded: false,
-        },
-        {
-            id: "30",
-            role: "assistant",
-            content: "시스템 정합성 테스트를 위해 하나 더 펼쳐둔 위젯입니다.",
-            isExpanded: true,
-            gridData: [],
-        },
+    const [messages, setMessages] = useState<ChatMessage[]>([
+        // {
+        //     id: "1",
+        //     role: "assistant",
+        //     content: "안녕하세요! 어떤 데이터를 분석해 드릴까요?",
+        //     isExpanded: false,
+        // },
+        // {
+        //     id: "2",
+        //     role: "user",
+        //     content: "최근 올림픽 우승자들의 통계 데이터를 보고 싶어.",
+        //     isExpanded: false,
+        // },
+        // {
+        //     id: "3",
+        //     role: "assistant",
+        //     content: "네, 요청하신 올림픽 데이터를 가져왔습니다. 아래에서 상세 내용을 확인하세요.",
+        //     isExpanded: true, // 과거 대화 펼침 상태
+        //     viewSpec: {
+        //         title: "올림픽 스펙",
+        //         columns: [{ field: "athlete", headerName: "선수명" }],
+        //     }, // DB에서 가져온 스펙이라 가정
+        // },
     ]);
 
-    // 그리드 펼치기/접기 토글 함수
+    // 유저의 새로운 질문 입력 (테스트용)
+    const handleNewQuestion = () => {
+        const newUserMsg: ChatMessage = {
+            id: `user-${Date.now()}`,
+            role: "user",
+            content: "여기에 대한 국가별 통계를 새로 그려줘.",
+            isExpanded: false,
+        };
+        const newAiMsg: ChatMessage = {
+            id: `ai-${Date.now()}`,
+            role: "assistant",
+            content: "", // 초기 텍스트 비어있음
+            isExpanded: false,
+            isStreamingPending: true, // 🌟 스트림 시작 트리거 플래그
+        };
+        setMessages(prev => [...prev, newUserMsg, newAiMsg]);
+    };
+
     const toggleGrid = (id: string) => {
         setMessages(prev =>
             prev.map(msg => (msg.id === id ? { ...msg, isExpanded: !msg.isExpanded } : msg)),
@@ -131,34 +157,20 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-slate-100 overflow-y-auto p-4 gap-6">
-            {messages.map(msg => (
-                <div key={msg.id} className="flex flex-col gap-2">
-                    {/* 말풍선 영역 */}
-                    <div
-                        className={`p-4 rounded-lg ${msg.role === "user" ? "bg-blue-500 text-white self-end" : "bg-white self-start shadow-sm"}`}
-                    >
-                        {msg.content}
-                        {msg.role === "assistant" && (
-                            <button
-                                onClick={() => toggleGrid(msg.id)}
-                                className="ml-4 text-xs underline opacity-70"
-                            >
-                                {msg.isExpanded ? "데이터 접기" : "데이터 분석 보기"}
-                            </button>
-                        )}
-                    </div>
+        <div className="flex flex-col h-screen bg-slate-100 overflow-y-auto p-4 gap-6 pb-32">
+            {/* 테스트용 버튼 패널 */}
+            <div className="sticky top-0 bg-white/80 backdrop-blur p-3 rounded shadow z-10 text-center">
+                <button
+                    onClick={handleNewQuestion}
+                    className="px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
+                >
+                    새 스트리밍 메시지 시뮬레이션
+                </button>
+            </div>
 
-                    {/* 그리드/차트 위젯 영역 (펼쳐졌을 때만 렌더링) */}
-                    {msg.isExpanded && (
-                        <div className="w-full bg-white p-4 rounded-xl shadow-md border animate-in fade-in duration-300">
-                            <KpiAgentGrid
-                                messageId={msg.id}
-                                // initialSnapshot={msg.gridSnapshot}
-                            />
-                        </div>
-                    )}
-                </div>
+            {/* 메시지 리스트 렌더링 */}
+            {messages.map(msg => (
+                <ChatMessageRow key={msg.id} msg={msg} toggleGrid={toggleGrid} />
             ))}
         </div>
     );
