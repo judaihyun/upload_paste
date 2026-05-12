@@ -51,21 +51,32 @@ export async function POST(req: Request) {
                 sendEvent("text:start");
                 await delay(100);
 
-                // 🌟 LLM이 생성할 전체 텍스트 (마크다운 펜스 + JSON)
+                // 🌟 첫 번째 텍스트 뭉치 (인사말 + 펜스 블록 + 짧은 안내)
                 const jsonString = JSON.stringify(FAKE_SCHEMA_PAYLOAD, null, 2);
-                const fullText = `분석이 완료되었습니다.\n\n\`\`\`kpi_agent\n${jsonString}\n\`\`\`\n\n위의 스펙을 바탕으로 그리드를 렌더링합니다.`;
+                const firstTextChunk = `분석이 완료되었습니다.\n\n\`\`\`kpi_agent\n${jsonString}\n\`\`\`\n\n위의 스펙을 바탕으로 1차 그리드 렌더링을 시작합니다.`;
 
-                // 🚀 핵심: 무작위 파편화 (Random Token Chunking)
-                // 실제 LLM처럼 1~4글자 단위로 문자열을 무자비하게 쪼개어 스트림으로 방출합니다.
                 let currentIndex = 0;
-                while (currentIndex < fullText.length) {
+                while (currentIndex < firstTextChunk.length) {
                     const chunkSize = Math.floor(Math.random() * 4) + 1; // 1~4글자 무작위
-                    const chunk = fullText.slice(currentIndex, currentIndex + chunkSize);
-
+                    const chunk = firstTextChunk.slice(currentIndex, currentIndex + chunkSize);
                     sendEvent("text:delta", chunk);
-
                     currentIndex += chunkSize;
-                    await delay(20); // 20ms 간격으로 청크 전송
+                    await delay(20);
+                }
+
+                // 🌟 요청하신 부분: 펜스 블록 전송이 완전히 끝난 후, LLM이 추가 말을 덧붙이는 상황 모사
+                await delay(600); // LLM이 잠시 고민하는 딜레이 (이때 UI에는 그리드가 짠 하고 떠있어야 함)
+
+                const additionalText =
+                    "\n\n추가적으로 궁금한 점이 있으신가요? 예를 들어 '한국의 데이터만 필터링해 줘' 혹은 '달성률 기준으로 내림차순 정렬해 줘'와 같이 자유롭게 요청하실 수 있습니다. 필요하다면 차트 분석도 도와드리겠습니다.";
+
+                let addIndex = 0;
+                while (addIndex < additionalText.length) {
+                    const chunkSize = Math.floor(Math.random() * 3) + 1; // 1~3글자 무작위
+                    const chunk = additionalText.slice(addIndex, addIndex + chunkSize);
+                    sendEvent("text:delta", chunk);
+                    addIndex += chunkSize;
+                    await delay(30); // 조금 더 느린 타이핑 속도 모사
                 }
 
                 // 3. 텍스트 생성 종료 및 스트림 닫기

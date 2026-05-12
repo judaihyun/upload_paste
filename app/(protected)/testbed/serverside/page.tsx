@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-// import DataWidget from "@/components/DataWidget";
-// import KpiAgentGrid from "@/components/KpiAgent/ui/KpiAgentGrid";
-import { useLlmStream } from "@/components/KpiAgent/useLlmStream";
+import { useState, useEffect, useRef, useMemo } from "react";
 import KpiAgentGrid from "@/components/KpiAgent";
+import { useLlmStream } from "@/components/KpiAgent/useLlmStream";
 
-// 1. 기존 타입 유지 + 스트리밍 플래그 추가
+// =====================================================================
+// 1. 타입 정의
+// =====================================================================
 export interface ChatMessage {
     id: string;
     role: "user" | "assistant";
@@ -13,15 +13,15 @@ export interface ChatMessage {
     gridData?: any[];
     isExpanded: boolean;
     gridSnapshot?: any;
-
-    // 🌟 추가됨: 이 메시지가 현재 스트리밍 대상인지 여부
     isStreamingPending?: boolean;
-    // 🌟 추가됨: 백엔드에서 확정되어 내려온 스펙 (과거 대화용)
     viewSpec?: any;
 }
 
-// 🌟 2. 렌더링 격리용 하위 컴포넌트 (핵심)
-// 배열 전체가 리렌더링되는 것을 막기 위해 스트리밍 로직은 이 안에서만 돕니다.
+type ContentNode = { type: "text"; content: string } | { type: "grid"; spec: any; id: string };
+
+// =====================================================================
+// 2. 자식 컴포넌트: 개별 메시지 행 (스트리밍 및 파싱 전담)
+// =====================================================================
 const ChatMessageRow = ({
     msg,
     toggleGrid,
@@ -29,17 +29,20 @@ const ChatMessageRow = ({
     msg: ChatMessage;
     toggleGrid: (id: string) => void;
 }) => {
-    // 스트림 훅 연결
-    const {
-        text,
-        viewSpec: streamedViewSpec,
-        isStreaming,
-        reasoningText,
-        startStream,
-    } = useLlmStream();
+    const [rawText, setRawText] = useState(msg.content || "");
+    const [reasoningText, setReasoningText] = useState("");
+    const [isStreaming, setIsStreaming] = useState(false);
+
+    const { startStream } = useLlmStream({
+        onChunkReceived: chunk => {
+            setRawText(prev => prev + chunk);
+        },
+        onReasoningUpdate: text => setReasoningText(text),
+        onStreamStatusChange: status => setIsStreaming(status),
+    });
+
     const hasStarted = useRef(false);
 
-    // 마운트 시 이 메시지가 '스트리밍 대기' 상태라면 스트림 시작
     useEffect(() => {
         if (msg.isStreamingPending && !hasStarted.current) {
             hasStarted.current = true;
@@ -47,69 +50,128 @@ const ChatMessageRow = ({
         }
     }, [msg.isStreamingPending, msg.id, startStream]);
 
-    // 노출할 텍스트 결정 (스트리밍 중이면 스트림 텍스트, 과거 대화면 확정 텍스트)
-    const displayText = msg.isStreamingPending ? text : msg.content;
+    const contentNodes = useMemo<ContentNode[]>(() => {
+        const nodes: ContentNode[] = [];
+        const openToken = "```kpi_agent";
+        const closeToken = "```";
 
-    // 노출할 스펙 결정 (스트리밍 파싱 스펙 vs 과거 DB에 저장된 스펙)
-    const effectiveViewSpec = msg.isStreamingPending ? streamedViewSpec : msg.viewSpec;
+        let currentIndex = 0;
+        let textBuffer = "";
+
+        while (currentIndex < rawText.length) {
+            const openIdx = rawText.indexOf(openToken, currentIndex);
+
+            if (openIdx === -1) {
+                textBuffer += rawText.substring(currentIndex);
+
+                break;
+            }
+
+            textBuffer += rawText.substring(currentIndex, openIdx);
+
+            const contentStartIdx = openIdx + openToken.length;
+            const closeIdx = rawText.indexOf(closeToken, contentStartIdx);
+
+            if (closeIdx === -1) {
+                break;
+            }
+
+            if (textBuffer.trim()) {
+                nodes.push({ type: "text", content: textBuffer });
+            }
+            textBuffer = "";
+
+            const jsonString = rawText.substring(contentStartIdx, closeIdx).trim();
+            try {
+                const parsedSpec = JSON.parse(jsonString);
+                nodes.push({
+                    type: "grid",
+                    spec: parsedSpec,
+                    id: `${msg.id}_grid_${openIdx}`,
+                });
+            } catch (e) {
+                console.warn(`[${msg.id}] JSON 파싱 실패, 텍스트로 대체:`, e);
+                nodes.push({ type: "text", content: jsonString });
+            }
+
+            currentIndex = closeIdx + closeToken.length;
+        }
+
+        if (textBuffer.trim()) {
+            nodes.push({ type: "text", content: textBuffer });
+        }
+
+        return nodes;
+    }, [rawText, msg.id]);
 
     return (
-        <div className="flex flex-col gap-2">
-            {/* 말풍선 영역 */}
-            <div
-                className={`p-4 rounded-lg w-fit max-w-[80%] ${
-                    msg.role === "user"
-                        ? "bg-blue-500 text-white self-end"
-                        : "bg-white self-start shadow-sm"
-                }`}
-            >
-                {/* 1. 추론 과정 UI (스트리밍 중에만 노출) */}
-                {reasoningText && msg.isStreamingPending && (
-                    <div className="mb-3 p-2 bg-slate-50 text-slate-500 text-xs font-mono rounded border border-slate-100 whitespace-pre-wrap">
+        <div className="flex flex-col gap-3">
+            {reasoningText && msg.isStreamingPending && (
+                <div className={`p-4 rounded-lg bg-white self-start shadow-sm w-fit max-w-[80%]`}>
+                    <div className="p-2 bg-slate-50 text-slate-500 text-xs font-mono rounded border border-slate-100 whitespace-pre-wrap">
                         <span className="font-bold text-slate-600 block mb-1">🧠 추론 중...</span>
                         {reasoningText}
                     </div>
-                )}
-
-                {/* 2. 메인 텍스트 영역 */}
-                <div className="whitespace-pre-wrap leading-relaxed">
-                    {/* 마크다운 펜스 블록 화면 숨김 처리 (정규식 치환) */}
-                    {displayText.replace(/```kpi_agent[\s\S]*?```/g, "")}
-                    {isStreaming && (
-                        <span className="animate-pulse inline-block ml-1 w-2 h-4 bg-blue-500 align-middle" />
-                    )}
-                </div>
-
-                {/* 3. 데이터 분석 토글 버튼 (AI 응답이고, 스펙이 존재할 때만 노출) */}
-                {msg.role === "assistant" && effectiveViewSpec && !isStreaming && (
-                    <button
-                        onClick={() => toggleGrid(msg.id)}
-                        className="mt-3 text-xs underline opacity-70 text-blue-600 font-medium hover:opacity-100 transition-opacity block"
-                    >
-                        {msg.isExpanded ? "데이터 닫기" : "데이터 분석 보기"}
-                    </button>
-                )}
-            </div>
-
-            {/* 4. 그리드 위젯 렌더링 영역 */}
-            {/* 스트리밍 중 스펙이 튀어나왔거나(자동 펼침), 유저가 펼치기를 눌렀을 때 */}
-            {(msg.isExpanded || (msg.isStreamingPending && effectiveViewSpec)) && (
-                <div className="w-full bg-white p-4 rounded-xl shadow-md border animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {/* KpiAgentGrid가 import 되어있다고 가정하고 더미 div로 대체합니다 */}
-                    <KpiAgentGrid messageId={msg.id} initialViewSpec={effectiveViewSpec} />
                 </div>
             )}
+
+            {contentNodes.map((node, index) => {
+                if (node.type === "text") {
+                    return (
+                        <div
+                            key={`${msg.id}_node_${index}`}
+                            className={`p-4 rounded-lg w-fit max-w-[80%] whitespace-pre-wrap leading-relaxed ${
+                                msg.role === "user"
+                                    ? "bg-blue-500 text-white self-end"
+                                    : "bg-white self-start shadow-sm"
+                            }`}
+                        >
+                            {node.content}
+                            {isStreaming && index === contentNodes.length - 1 && (
+                                <span className="animate-pulse inline-block ml-1 w-2 h-4 bg-blue-500 align-middle" />
+                            )}
+                        </div>
+                    );
+                }
+
+                if (node.type === "grid") {
+                    const isExpanded = msg.isExpanded || msg.isStreamingPending;
+
+                    return (
+                        <div key={node.id} className="flex flex-col gap-2">
+                            {!isStreaming && (
+                                <div className="p-4 rounded-lg bg-white self-start shadow-sm w-fit">
+                                    <button
+                                        onClick={() => toggleGrid(msg.id)}
+                                        className="text-xs underline opacity-70 text-blue-600 font-medium"
+                                    >
+                                        {isExpanded ? "데이터 닫기" : "데이터 분석 보기"}
+                                    </button>
+                                </div>
+                            )}
+
+                            {isExpanded && (
+                                <div className="w-full bg-white p-4 rounded-xl shadow-md border animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    <KpiAgentGrid messageId={msg.id} initialViewSpec={node.spec} />
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+                return null;
+            })}
         </div>
     );
 };
 
 // =====================================================================
-// 메인 페이지 컴포넌트
+// 3. 부모 컴포넌트: 페이지 라우팅 진입점 (상태 배열 관리)
 // =====================================================================
-export default function ChatPage() {
+export default function ServerSideChatPage() {
+    // 전체 대화 기록을 관리하는 메인 상태
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-    // 유저의 새로운 질문 입력 (테스트용)
+    // 유저의 새로운 질문 입력 시뮬레이션
     const handleNewQuestion = () => {
         const newUserMsg: ChatMessage = {
             id: `user-${Date.now()}`,
@@ -120,13 +182,14 @@ export default function ChatPage() {
         const newAiMsg: ChatMessage = {
             id: `ai-${Date.now()}`,
             role: "assistant",
-            content: "", // 초기 텍스트 비어있음
+            content: "",
             isExpanded: false,
-            isStreamingPending: true, // 🌟 스트림 시작 트리거 플래그
+            isStreamingPending: true, // 자식 컴포넌트가 마운트되면서 스트림을 시작하도록 유도
         };
         setMessages(prev => [...prev, newUserMsg, newAiMsg]);
     };
 
+    // 자식 컴포넌트에서 그리드를 열고 닫을 때 부모의 상태를 변경
     const toggleGrid = (id: string) => {
         setMessages(prev =>
             prev.map(msg => (msg.id === id ? { ...msg, isExpanded: !msg.isExpanded } : msg)),
@@ -135,7 +198,6 @@ export default function ChatPage() {
 
     return (
         <div className="flex flex-col h-screen bg-slate-100 overflow-y-auto p-4 gap-6 pb-32">
-            {/* 테스트용 버튼 패널 */}
             <div className="sticky top-0 bg-white/80 backdrop-blur p-3 rounded shadow z-10 text-center">
                 <button
                     onClick={handleNewQuestion}
@@ -145,7 +207,7 @@ export default function ChatPage() {
                 </button>
             </div>
 
-            {/* 메시지 리스트 렌더링 */}
+            {/* 메인 상태(messages) 배열을 순회하며 자식 컴포넌트(ChatMessageRow)를 마운트 */}
             {messages.map(msg => (
                 <ChatMessageRow key={msg.id} msg={msg} toggleGrid={toggleGrid} />
             ))}
