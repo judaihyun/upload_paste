@@ -57,7 +57,6 @@ export default function KpiAgentGrid({ messageId, initialViewSpec }: KpiAgentGri
                         allowDragFromColumnsToolPanel={true}
                         paginationPageSizeSelector={PAGINATIONS}
                         onPaginationChanged={onPaginationChanged}
-                        masterDetail={true}
                         detailCellRendererParams={detailCellRendererParams}
                         columnDefs={columnDefs}
                     />

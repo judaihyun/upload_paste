@@ -57,8 +57,6 @@ export async function POST(req: Request) {
 
                 // 🚀 핵심: 무작위 파편화 (Random Token Chunking)
                 // 실제 LLM처럼 1~4글자 단위로 문자열을 무자비하게 쪼개어 스트림으로 방출합니다.
-                // 이를 통해 프론트엔드의 정규식 파서가 분절된 마크다운(예: ` ```kp ` 와 `i_agent `)에서
-                // 에러를 뿜지 않고 잘 대기하는지 완벽하게 검증할 수 있습니다.
                 let currentIndex = 0;
                 while (currentIndex < fullText.length) {
                     const chunkSize = Math.floor(Math.random() * 4) + 1; // 1~4글자 무작위

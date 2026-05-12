@@ -107,30 +107,7 @@ const ChatMessageRow = ({
 // 메인 페이지 컴포넌트
 // =====================================================================
 export default function ChatPage() {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        // {
-        //     id: "1",
-        //     role: "assistant",
-        //     content: "안녕하세요! 어떤 데이터를 분석해 드릴까요?",
-        //     isExpanded: false,
-        // },
-        // {
-        //     id: "2",
-        //     role: "user",
-        //     content: "최근 올림픽 우승자들의 통계 데이터를 보고 싶어.",
-        //     isExpanded: false,
-        // },
-        // {
-        //     id: "3",
-        //     role: "assistant",
-        //     content: "네, 요청하신 올림픽 데이터를 가져왔습니다. 아래에서 상세 내용을 확인하세요.",
-        //     isExpanded: true, // 과거 대화 펼침 상태
-        //     viewSpec: {
-        //         title: "올림픽 스펙",
-        //         columns: [{ field: "athlete", headerName: "선수명" }],
-        //     }, // DB에서 가져온 스펙이라 가정
-        // },
-    ]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
 
     // 유저의 새로운 질문 입력 (테스트용)
     const handleNewQuestion = () => {
