@@ -4,17 +4,18 @@ import { GridReadyEvent, IServerSideDatasource } from "ag-grid-enterprise";
 import { AgentAdapter } from "./adapter/agent.adapter";
 import { WidgetMockService } from "./mock.service";
 
-export function useWidgetManager(messageId: string, initialViewSpec?: any) {
-    const [columnDefs, setColumnDefs] = useState<any[]>([]);
+export function useWidgetManager(
+    messageId: string,
+    initialViewSpec?: any,
+    onDataFetched?: (data: any[], schema: string[]) => void, // <-- 추가됨
+) {
+    const [columnDefs, setColumnDefs] = useState<any[]>(() => {
+        if (initialViewSpec?.columns) {
+            return AgentAdapter.toColumnDefs(initialViewSpec.columns);
+        }
+        return [];
+    });
     const [domLayout, setDomLayout] = useState<"normal" | "autoHeight">("normal");
-
-    useEffect(() => {
-        // 어댑터를 통해 AG Grid 언어로 번역 후 렌더링
-        console.log("초기 ViewSpec:", initialViewSpec);
-        const dynamicColumns = AgentAdapter.toColumnDefs(initialViewSpec.columns);
-        console.log(dynamicColumns);
-        setColumnDefs(dynamicColumns);
-    }, [initialViewSpec]);
 
     const onPaginationChanged = useCallback((params: any) => {
         const pageSize = params.api.paginationGetPageSize();
@@ -26,30 +27,27 @@ export function useWidgetManager(messageId: string, initialViewSpec?: any) {
     const onGridReady = useCallback(
         (params: GridReadyEvent) => {
             params.api.setGridOption("loading", true);
-            console.log("그리드 준비 완료:");
 
             const datasource: IServerSideDatasource = {
                 getRows: async getRowsParams => {
                     try {
-                        console.log(
-                            `[${messageId}] 🚀 사용자 액션(필터/정렬/페이징):`,
-                            getRowsParams.request,
-                        );
                         const standardReq = AgentAdapter.toStandard(
                             messageId,
                             getRowsParams.request,
                         );
-                        console.log(standardReq);
                         const response = await WidgetMockService.fetchMasterData(standardReq);
 
-                        // 스키마 동기화 (최초 1회)
+                        // 🌟 2. 백엔드에서 가져온 실제 데이터와 스키마를 KpiAgentGrid(B그리드)로 토스!
+                        if (onDataFetched) {
+                            onDataFetched(response.data, response.schema);
+                        }
+
                         if (response.schema.length > 0 && columnDefs.length === 0) {
                             const dynamicColumns = response.schema.map((key, index) => {
                                 return {
                                     field: key,
                                     filter: true,
                                     sortable: true,
-                                    // 마스터/디테일 [+] 버튼은 무조건 첫 번째 컬럼에 배정
                                     cellRenderer: index === 0 ? "agGroupCellRenderer" : undefined,
                                 };
                             });
@@ -63,7 +61,6 @@ export function useWidgetManager(messageId: string, initialViewSpec?: any) {
                         });
                         params.api.setGridOption("loading", false);
                     } catch (error) {
-                        console.error("데이터 로딩 실패:", error);
                         getRowsParams.fail();
                     }
                 },
@@ -71,7 +68,7 @@ export function useWidgetManager(messageId: string, initialViewSpec?: any) {
 
             params.api.setGridOption("serverSideDatasource", datasource);
         },
-        [messageId, columnDefs.length],
+        [messageId, columnDefs.length, onDataFetched], // 의존성 배열에 추가
     );
 
     const detailCellRendererParams = useMemo(() => {
