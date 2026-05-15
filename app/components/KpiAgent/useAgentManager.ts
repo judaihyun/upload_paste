@@ -38,7 +38,7 @@ export function useWidgetManager(
                         const response = await WidgetMockService.fetchMasterData(standardReq);
 
                         // 🌟 2. 백엔드에서 가져온 실제 데이터와 스키마를 KpiAgentGrid(B그리드)로 토스!
-                        if (onDataFetched) {
+                        if (onDataFetched && response.data) {
                             onDataFetched(response.data, response.schema);
                         }
 
@@ -71,37 +71,10 @@ export function useWidgetManager(
         [messageId, columnDefs.length, onDataFetched], // 의존성 배열에 추가
     );
 
-    const detailCellRendererParams = useMemo(() => {
-        return {
-            getDetailRowData: async (params: any) => {
-                const masterRowId = params.data.id;
-                try {
-                    const response = await WidgetMockService.fetchDetailData({
-                        messageId: messageId,
-                        masterId: masterRowId,
-                    });
-                    params.successCallback(response.data);
-                } catch (e) {
-                    params.successCallback([]);
-                }
-            },
-            detailGridOptions: {
-                columnDefs: [
-                    { field: "detailId", headerName: "상세 ID" },
-                    { field: "category", headerName: "분류" },
-                    { field: "hours", headerName: "소요 시간" },
-                    { field: "status", headerName: "상태" },
-                ],
-                domLayout: "autoHeight",
-            },
-        };
-    }, [messageId]);
-
     return {
         domLayout,
         onGridReady,
         columnDefs,
         onPaginationChanged,
-        detailCellRendererParams,
     };
 }

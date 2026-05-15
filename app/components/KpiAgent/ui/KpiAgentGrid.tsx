@@ -23,13 +23,16 @@ export function KpiAgentGrid({ messageId, initialViewSpec }: KpiAgentGridProps) 
     const gridARef = useRef<AgGridReact>(null);
     const gridBRef = useRef<AgGridReact>(null);
     const chartContainerRef = useRef<HTMLDivElement>(null);
+    const [bGridData, setBGridData] = useState<any[]>([]);
 
     // A그리드용 데이터 및 메타데이터 관리 훅
-    const { domLayout, onGridReady, columnDefs, onPaginationChanged, detailCellRendererParams } =
-        useWidgetManager(messageId, initialViewSpec);
+    const { domLayout, onGridReady, columnDefs, onPaginationChanged } = useWidgetManager(
+        messageId,
+        initialViewSpec,
+        data => setBGridData(data),
+    );
 
     // B그리드(통계용) 명시적 상태
-    const [bGridData, setBGridData] = useState<any[]>([]);
 
     // [테스트 시뮬레이션] A그리드 필터 조작 후 통계 데이터를 가져왔다고 가정
     const handleSimulateDataFetch = () => {
@@ -111,15 +114,14 @@ export function KpiAgentGrid({ messageId, initialViewSpec }: KpiAgentGridProps) 
                             onGridReady={onGridReady}
                             rowModelType="serverSide"
                             pagination={true}
-                            cellSelection={true}
-                            enableCharts={true}
+                            cellSelection={false}
+                            enableCharts={false}
                             domLayout={domLayout}
                             sideBar={widgetSideBarConfig}
                             chartToolPanelsDef={widgetChartToolPanelsDef}
                             allowDragFromColumnsToolPanel={true}
                             paginationPageSizeSelector={PAGINATIONS}
                             onPaginationChanged={onPaginationChanged}
-                            detailCellRendererParams={detailCellRendererParams}
                             columnDefs={columnDefs} // 🌟 복구됨: 정상적으로 데이터와 헤더가 그려집니다.
                         />
                     </div>
