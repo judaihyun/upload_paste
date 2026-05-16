@@ -122,7 +122,7 @@ const ChatMessageRow = ({
                 {msg.role === "assistant" && !isStreaming && (
                     <button
                         onClick={() => setIsMessageCollapsed(!isMessageCollapsed)}
-                        className="px-2 py-1 text-[10px] font-bold border border-gray-400 bg-gray-100 hover:bg-gray-200 uppercase text-gray-600"
+                        className="px-2 py-1 text-[10px] font-bold border border-gray-400  hover:bg-gray-200 uppercase text-gray-600"
                     >
                         {isMessageCollapsed ? "▼ EXPAND MESSAGE" : "▲ COLLAPSE MESSAGE"}
                     </button>
@@ -134,7 +134,7 @@ const ChatMessageRow = ({
                 // 1. 메시지가 접혔을 때 (요약 표시)
                 <div
                     onClick={() => setIsMessageCollapsed(false)}
-                    className="w-full max-w-3xl border-2 border-dashed border-gray-300 bg-gray-50 p-3 text-center text-xs text-gray-400 font-bold tracking-widest cursor-pointer hover:bg-gray-100 uppercase"
+                    className="w-full max-w-3xl border-2 border-gray-300 p-3 text-center text-xs text-gray-400 font-bold tracking-widest cursor-pointer hover:bg-gray-100 uppercase"
                 >
                     [RESPONSE HIDDEN - CLICK TO EXPAND]
                 </div>
@@ -143,7 +143,7 @@ const ChatMessageRow = ({
                 <>
                     {/* 추론 영역 */}
                     {reasoningText && msg.isStreamingPending && (
-                        <div className="w-full max-w-3xl border-2 border-dashed border-gray-400 bg-gray-50 p-4 mb-4">
+                        <div className="w-full max-w-3xl border-2 border-gray-400 p-4 mb-4">
                             <div className="flex justify-between items-center border-b border-gray-300 pb-2 mb-2">
                                 <span className="text-sm font-bold text-gray-600">
                                     REASONING PROCESS
@@ -170,7 +170,7 @@ const ChatMessageRow = ({
                                     >
                                         {node.content}
                                         {isStreaming && index === contentNodes.length - 1 && (
-                                            <span className="inline-block ml-2 w-2 h-4 bg-black animate-pulse align-middle" />
+                                            <span className="inline-block ml-2 w-2 h-4 animate-pulse align-middle" />
                                         )}
                                     </div>
                                 );
@@ -182,11 +182,11 @@ const ChatMessageRow = ({
                                 return (
                                     <div
                                         key={node.id}
-                                        className="flex flex-col w-full border-2 border-gray-800 bg-gray-100 p-2"
+                                        className="flex flex-col w-full border-2 border-gray-800 p-2"
                                     >
                                         {/* 🌟 내부 데이터 모듈(AG Grid/Chart) 전용 토글 */}
                                         {!isStreaming && (
-                                            <div className="flex justify-between items-center bg-gray-300 p-2 border border-gray-400">
+                                            <div className="flex justify-between items-center p-2 border border-gray-400">
                                                 <span className="text-sm font-bold text-gray-800">
                                                     [DATA MODULE]
                                                 </span>
@@ -254,16 +254,16 @@ export default function ServerSideChatPage() {
     return (
         <div className="fixed inset-0 flex flex-col bg-white font-sans">
             {/* 상단 헤더 */}
-            <div className="w-full border-b-2 border-black bg-gray-100 p-4 shrink-0 flex justify-between items-center">
+            <div className="w-full border-b-2 border-black p-4 shrink-0 flex justify-between items-center">
                 <h1 className="text-lg font-bold uppercase tracking-wider text-black">
                     [APP HEADER] KPI Agent Workspace
                 </h1>
             </div>
 
             {/* 메인 챗 컨텐츠 영역 */}
-            <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6 w-full max-w-5xl mx-auto border-x-2 border-dashed border-gray-200">
+            <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6 w-full max-w-5xl mx-auto border-x-2 border-gray-200">
                 {messages.length === 0 && (
-                    <div className="h-full flex items-center justify-center text-gray-400 border-2 border-dashed border-gray-300 m-8 font-bold tracking-widest uppercase">
+                    <div className="h-full flex items-center justify-center text-gray-400 border-2 border-gray-300 m-8 font-bold tracking-widest uppercase">
                         [EMPTY CHAT AREA]
                     </div>
                 )}
@@ -274,7 +274,7 @@ export default function ServerSideChatPage() {
             </div>
 
             {/* 하단 LLM 프롬프트 영역 */}
-            <div className="w-full border-t-2 border-black bg-gray-100 p-6 shrink-0 safe-area-bottom">
+            <div className="w-full border-t-2 border-black  p-6 shrink-0 safe-area-bottom">
                 <div className="w-full max-w-5xl mx-auto relative flex items-center">
                     <input
                         type="text"

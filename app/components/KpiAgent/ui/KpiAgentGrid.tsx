@@ -98,7 +98,7 @@ export function KpiAgentGrid({ messageId, initialViewSpec }: KpiAgentGridProps) 
                 {/* ============================================================== */}
                 {/* 1. GRID A: 실제 사용자에게 보여지는 서버사이드 메인 그리드 */}
                 {/* ============================================================== */}
-                <div className="w-full p-2 bg-gray-50 border-2 border-dashed border-gray-400">
+                <div className="w-full p-2  border-2 border-gray-400">
                     <div className="text-xs font-bold text-gray-500 mb-2 uppercase text-center w-full">
                         [GRID A: VISIBLE SERVER-SIDE GRID]
                     </div>
@@ -161,7 +161,7 @@ export function KpiAgentGrid({ messageId, initialViewSpec }: KpiAgentGridProps) 
             {/* ============================================================== */}
             <div
                 ref={chartContainerRef}
-                className="w-full h-[300px] border-2 border-dashed border-black bg-gray-200 flex flex-col items-center justify-center p-4 relative overflow-hidden"
+                className="w-full h-[300px] border-2 border-black  flex flex-col items-center justify-center p-4 relative overflow-hidden"
             >
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-50 z-0">
                     <span className="text-gray-600 font-bold tracking-widest uppercase mb-2">
